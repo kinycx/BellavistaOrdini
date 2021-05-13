@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.fonts.Font;
 import android.os.Bundle;
+import android.os.Environment;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
@@ -16,16 +17,22 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.itextpdf.io.IOException;
+import com.itextpdf.kernel.color.DeviceGray;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.LineSeparator;
 import com.itextpdf.layout.element.List;
 import com.itextpdf.layout.element.ListItem;
 import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.property.TextAlignment;
+import com.itextpdf.layout.property.UnitValue;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionDeniedResponse;
@@ -34,12 +41,21 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.single.PermissionListener;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.Objects;
+
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.property.UnitValue;
 
 import com.itextpdf.*;
 
 public class MainActivity extends AppCompatActivity {
 
     Button btnCreatePDF;
+    public static final String PATH = (Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toString());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,8 +72,9 @@ public class MainActivity extends AppCompatActivity {
 
                            @Override
                            public void onClick(View v) {
-                               createPDFFile(Common.getAppPath(MainActivity.this) + "test_pdf.pdf");
-
+                               File file = new File(PATH);
+                               Objects.requireNonNull(file.getParentFile()).mkdirs();
+                               createPDFFile(PATH);
                            }
                        });
                     }
@@ -87,34 +104,54 @@ public class MainActivity extends AppCompatActivity {
         //addLineSpace(document);
     }
 
-    private void createPDFFile(String path){
-        if(new File(path).exists())
-            new File(path).delete();
-        try {
-            PdfWriter writer = new PdfWriter(path);
-            PdfDocument pdf = new PdfDocument(writer);
-            Document document = new Document(pdf, PageSize.A6);
-            // Create a PdfFont
-            PdfFont font = PdfFontFactory.createFont("res/font/times.ttf");
-            // Add a Paragraph
-            document.add(new Paragraph("iText is:").setFont(font));
-            // Create a List
-            List list = new List()
-                    .setSymbolIndent(12)
-                    .setListSymbol("\u2022")
-                    .setFont(font);
-            // Add ListItem objects
-            list.add(new ListItem("Never gonna give you up"))
-                    .add(new ListItem("Never gonna let you down"))
-                    .add(new ListItem("Never gonna run around and desert you"))
-                    .add(new ListItem("Never gonna make you cry"))
-                    .add(new ListItem("Never gonna say goodbye"))
-                    .add(new ListItem("Never gonna tell a lie and hurt you"));
-            // Add the list
-            document.add(list);
+    private void createPDFFile(String path) throws IOException{
 
-            //Close document
-            document.close();
+        try {
+            File file = new File(PATH, "1.pdf");
+            OutputStream outputStream = new FileOutputStream(file);
+            PdfWriter writer = new PdfWriter(String.valueOf(file));
+            PdfDocument pdfDoc = new PdfDocument(writer);
+            Document doc = new Document(pdfDoc, PageSize.A4.rotate());
+
+            float[] columnWidths = {1, 5, 5};
+            Table table = new Table(UnitValue.createPercentArray(columnWidths));
+
+            //PdfFont f = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+            Cell cell = new Cell(1, 3)
+                    .add(new Paragraph("This is a header"))
+                    //.setFont(f)
+                    .setFontSize(13)
+                    .setFontColor(DeviceGray.WHITE)
+                    .setBackgroundColor(DeviceGray.BLACK)
+                    .setTextAlignment(TextAlignment.CENTER);
+
+            table.addHeaderCell(cell);
+
+            for (int i = 0; i < 2; i++) {
+                Cell[] headerFooter = new Cell[]{
+                        new Cell().setBackgroundColor(new DeviceGray(0.75f)).add(new Paragraph("#")),
+                        new Cell().setBackgroundColor(new DeviceGray(0.75f)).add(new Paragraph("Key")),
+                        new Cell().setBackgroundColor(new DeviceGray(0.75f)).add(new Paragraph("Value"))
+                };
+
+                for (Cell hfCell : headerFooter) {
+                    if (i == 0) {
+                        table.addHeaderCell(hfCell);
+                    } else {
+                        table.addFooterCell(hfCell);
+                    }
+                }
+            }
+
+            for (int counter = 0; counter < 100; counter++) {
+                table.addCell(new Cell().setTextAlignment(TextAlignment.CENTER).add(new Paragraph(String.valueOf(counter + 1))));
+                table.addCell(new Cell().setTextAlignment(TextAlignment.CENTER).add(new Paragraph("key " + (counter + 1))));
+                table.addCell(new Cell().setTextAlignment(TextAlignment.CENTER).add(new Paragraph("value " + (counter + 1))));
+            }
+
+            doc.add(table);
+
+            doc.close();
 
             Toast.makeText(this, "SUCCESS", Toast.LENGTH_LONG).show();
 
@@ -122,13 +159,14 @@ public class MainActivity extends AppCompatActivity {
 
         } catch (Exception e) {
             e.printStackTrace();
+            Toast.makeText(this, "PORCODIO NON FUNGEEEEEE", Toast.LENGTH_LONG).show();
         }
     }
 
     private void printPDF() {
         PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
         try{
-            PrintDocumentAdapter printDocumentAdapter = new PdfDocumentAdapter(MainActivity.this, Common.getAppPath(MainActivity.this) + ("test_pdf.pdf"));
+            PrintDocumentAdapter printDocumentAdapter = new PdfDocumentAdapter(MainActivity.this, PATH + File.pathSeparator + ("1.pdf"));
             printManager.print("Document", printDocumentAdapter, new PrintAttributes.Builder().build());
         }catch(Exception ex){
             Log.e("BroUsers", ""+ ex.getMessage());
